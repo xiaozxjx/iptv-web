@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播厅 · 本地 IPTV 播放器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M25 18l24 14-24 14z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f7fc; --panel:#ffffff; --border:#e3eaf5; --text:#16233b;
+    --muted:#7183a0; --accent:#2563eb; --accent-soft:#e8f0ff;
+    --ok:#16a34a; --bad:#dc2626; --warn:#d97706;
+    --shadow:0 2px 14px rgba(28,55,105,.07);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  button,input{font-family:inherit}
+  button{cursor:pointer}
+
+  header{
+    height:60px; flex:none; display:flex; align-items:center; gap:14px;
+    padding:0 18px; background:var(--panel); border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;letter-spacing:.5px}
+  .brand .mark{
+    width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;
+    display:grid;place-items:center;font-size:15px;box-shadow:0 3px 10px rgba(37,99,235,.25)
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;
+    background:#f1f5fb;color:var(--muted);font-size:12px;max-width:340px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+  .badge.ok .dot{background:var(--ok)} .badge.bad .dot{background:var(--bad)}
+  .badge.warn .dot{background:var(--warn)}
+  .spacer{flex:1}
+  .clock{color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px}
+  .icon-btn{
+    border:1px solid var(--border);background:#fff;color:var(--text);
+    height:32px;padding:0 12px;border-radius:8px;font-size:13px;
+    display:inline-flex;align-items:center;gap:6px;transition:.15s
+  }
+  .icon-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .menu-toggle{display:none}
+
+  /* 源固定为本地，不再提供切换 UI */
+
+  main{flex:1;min-height:0;display:flex}
+  aside{
+    width:310px;flex:none;background:var(--panel);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;min-height:0
+  }
+  .side-top{padding:14px;border-bottom:1px solid var(--border);flex:none}
+  .search{
+    width:100%;height:36px;padding:0 12px;border:1px solid var(--border);
+    border-radius:9px;outline:none;background:#f8fafd;font-size:13px
+  }
+  .search:focus{background:#fff;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .tabs{display:flex;gap:6px;margin-top:10px}
+  .tab{
+    flex:1;height:30px;border:1px solid transparent;background:#f1f5fb;color:var(--muted);
+    border-radius:7px;font-size:12px
+  }
+  .tab.on{background:var(--accent-soft);color:var(--accent);font-weight:600;border-color:#c9dcff}
+  .list{flex:1;overflow-y:auto;padding:8px 8px 20px}
+  .list::-webkit-scrollbar{width:8px}
+  .list::-webkit-scrollbar-thumb{background:#d8e2f0;border-radius:8px}
+  .group{margin-bottom:6px}
+  .group-head{
+    width:100%;display:flex;align-items:center;gap:8px;padding:9px 8px;
+    background:none;border:0;color:var(--muted);font-size:12px;font-weight:600;
+    letter-spacing:.4px;text-align:left
+  }
+  .group-head:hover{color:var(--accent)}
+  .group-head .arrow{transition:transform .15s;font-size:10px}
+  .group.closed .arrow{transform:rotate(-90deg)}
+  .group-head .cnt{margin-left:auto;background:#eef3fa;border-radius:10px;padding:1px 7px;font-size:11px}
+  .group-body{display:block}
+  .group.closed .group-body{display:none}
+  .ch{
+    width:100%;display:flex;align-items:center;gap:8px;padding:9px 10px;margin:2px 0;
+    border:0;border-radius:8px;background:transparent;text-align:left;color:var(--text)
+  }
+  .ch:hover{background:#f2f6fc}
+  .ch.on{background:var(--accent);color:#fff}
+  .ch-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+  .ch-tag{
+    font-size:10px;color:var(--muted);background:#eef3fa;border-radius:5px;padding:2px 6px;flex:none
+  }
+  .ch.on .ch-tag{background:rgba(255,255,255,.22);color:#fff}
+  .fav{border:0;background:none;color:#c6d2e3;font-size:15px;line-height:1;padding:2px 4px;flex:none}
+  .fav.on{color:#f5a623} .ch.on .fav{color:rgba(255,255,255,.55)} .ch.on .fav.on{color:#ffd166}
+  .empty{padding:30px 12px;color:var(--muted);text-align:center;font-size:13px}
+  .side-foot{
+    flex:none;padding:9px 14px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:11px;display:flex;justify-content:space-between
+  }
+
+  section.stage{flex:1;min-width:0;display:flex;flex-direction:column;padding:18px;gap:14px;overflow-y:auto}
+  .player-box{
+    position:relative;background:#0d1420;border-radius:12px;overflow:hidden;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;flex:1;min-height:260px
+  }
+  .player-box:fullscreen{border-radius:0}
+  .screen{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:block}
+  .overlay{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:10px;color:#e8eefb;text-align:center;padding:24px;
+    background:radial-gradient(circle at 50% 40%,#16243d 0%,#0a101b 75%)
+  }
+  .overlay.hidden{display:none}
+  .overlay .big{font-size:40px;opacity:.85}
+  .overlay .t{font-size:17px;font-weight:600}
+  .overlay .d{font-size:13px;color:#91a4c4;max-width:520px;line-height:1.7}
+  .overlay .retry{
+    margin-top:8px;border:1px solid #3b557d;background:#1b2c49;color:#dce8ff;
+    padding:8px 18px;border-radius:8px;font-size:13px
+  }
+  .overlay .retry:hover{background:#25416e}
+  .spin{width:34px;height:34px;border:3px solid #33456a;border-top-color:#5b9bff;border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .nowbar{
+    position:absolute;left:0;right:0;bottom:0;z-index:6;
+    display:flex;align-items:center;gap:12px;padding:12px 14px;
+    background:linear-gradient(to top,rgba(8,14,25,.97),rgba(12,21,37,.86));
+    backdrop-filter:blur(10px);border-top:1px solid rgba(255,255,255,.09);
+    color:#e9f0fc;flex-wrap:wrap;
+    transition:opacity .28s ease,transform .28s ease
+  }
+  .now-title{font-size:14px;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .now-sub{font-size:11px;color:#8296b6;margin-top:2px}
+  .pill{
+    font-size:11px;padding:3px 9px;border-radius:20px;background:#1e2d47;color:#9fb4d6;white-space:nowrap
+  }
+  .pill.live{background:#233a33;color:#5fd39a}
+  .pill.bad{background:#3a2027;color:#ff8a95}
+  .ctrl{
+    border:1px solid #2c3d59;background:#1a273c;color:#cddaf0;height:30px;
+    padding:0 10px;border-radius:7px;font-size:12px;display:inline-flex;align-items:center;gap:5px
+  }
+  .ctrl:hover{background:#263a59;border-color:#45618c}
+  .ctrl.on{color:#ffd166}
+  input[type=range]{width:88px;accent-color:#5b9bff}
+  .vol{display:flex;align-items:center;gap:7px;color:#9fb4d6;font-size:11px}
+
+  .hint{
+    flex:none;background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:11px 14px;color:var(--muted);font-size:12px;display:flex;gap:18px;flex-wrap:wrap;
+    transition:opacity .28s ease
+  }
+  /* 影院模式：只隐去悬浮控制条；底部说明常驻，不随点击 / 自动隐藏消失 */
+  body.ui-hidden .nowbar{opacity:0;transform:translateY(100%);pointer-events:none}
+  body.ui-hidden .screen,body.ui-hidden .screen video{cursor:none}
+  .icon-btn.on{border-color:#c9dcff;background:var(--accent-soft);color:var(--accent)}
+  .hint b{color:var(--text);font-weight:600}
+  .hint kbd{
+    background:#eef3fa;border:1px solid #dce6f4;border-radius:5px;padding:1px 6px;
+    font:inherit;color:var(--text)
+  }
+  /* 全屏：左侧悬浮频道列表（无任何提示，靠左缘 90px 热区唤出） */
+  .fs-dock{
+    position:absolute;top:0;left:0;bottom:0;width:330px;max-width:34vw;z-index:9;
+    display:flex;flex-direction:column;padding-bottom:72px;  /* 让开底部悬浮控制条 */
+    background:linear-gradient(to right,rgba(8,14,25,.97),rgba(13,23,40,.94));
+    border-right:1px solid rgba(255,255,255,.12);backdrop-filter:blur(12px);
+    color:#e9f0fc;box-shadow:14px 0 40px rgba(0,0,0,.4);
+    transform:translateX(-102%);opacity:0;pointer-events:none;
+    transition:transform .22s ease,opacity .22s ease
+  }
+  .fs-dock.open{transform:translateX(0);opacity:1;pointer-events:auto}
+  .fs-dock-head{display:flex;align-items:center;gap:8px;padding:14px 14px 8px;flex:none}
+  .fs-dock-title{font-size:14px;font-weight:600}
+  .fs-dock-close{
+    margin-left:auto;
+    border:1px solid #2c3d59;background:#1a273c;color:#cddaf0;
+    width:26px;height:26px;border-radius:7px;font-size:12px
+  }
+  .fs-dock-close:hover{background:#263a59}
+  .fs-search{
+    margin:6px 12px 8px;height:34px;padding:0 10px;flex:none;
+    border:1px solid #2c3d59;border-radius:8px;background:#111d31;
+    color:#e9f0fc;outline:none;font-size:13px
+  }
+  .fs-search:focus{border-color:#5b9bff;box-shadow:0 0 0 3px rgba(91,155,255,.18)}
+  .fs-dock .tabs{margin:0 12px 8px}
+  .fs-dock .tab{background:#1b2b45;color:#96abc9}
+  .fs-dock .tab.on{background:rgba(91,155,255,.22);color:#a8c8ff;border-color:#3b5c96}
+  .fs-list{flex:1;min-height:0;overflow-y:auto;padding:4px 8px 12px}
+  .fs-list::-webkit-scrollbar{width:8px}
+  .fs-list::-webkit-scrollbar-thumb{background:#33456a;border-radius:8px}
+  .fs-dock .group-head{color:#8fa6c8}
+  .fs-dock .group-head:hover{color:#a8c8ff}
+  .fs-dock .group-head .cnt{background:#22334f;color:#9fb4d6}
+  .fs-dock .ch{color:#dce8ff}
+  .fs-dock .ch:hover{background:rgba(91,155,255,.16)}
+  .fs-dock .ch.on{background:#3b6fd4;color:#fff}
+  .fs-dock .ch-tag{background:#22334f;color:#9fb4d6}
+  .fs-dock .ch.on .ch-tag{background:rgba(255,255,255,.2);color:#fff}
+  .fs-dock .fav{color:#7d90ae}
+  .fs-dock .empty{color:#8296b6}
+  .fs-dock-foot{flex:none;padding:9px 14px;border-top:1px solid rgba(255,255,255,.09);color:#7b91b4;font-size:11px}
+
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:#16233b;color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.2)
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* 本地服务掉线提示 */
+  .svc-banner{
+    position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-120%);
+    z-index:80;display:flex;align-items:center;gap:12px;max-width:92vw;
+    background:#a5261d;color:#fff;padding:10px 16px;border-radius:0 0 10px 10px;
+    font-size:13px;line-height:1.4;box-shadow:0 6px 22px rgba(0,0,0,.3);
+    transition:transform .25s ease;pointer-events:none
+  }
+  .svc-banner.show{transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .svc-banner button{
+    flex:none;border:1px solid rgba(255,255,255,.65);background:rgba(255,255,255,.16);
+    color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer
+  }
+  .svc-banner button:hover{background:rgba(255,255,255,.28)}
+
+  @media(max-width:900px){
+    .menu-toggle{display:inline-flex}
+    aside{position:fixed;z-index:30;top:60px;bottom:0;left:0;width:290px;transform:translateX(-100%);transition:transform .2s;box-shadow:6px 0 24px rgba(20,40,80,.12)}
+    aside.open{transform:translateX(0)}
+    section.stage{padding:12px}
+    .clock{display:none}
+    .badge{max-width:150px}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="svc-banner" id="svcBanner">
+  <span>本地 IPTV 服务没连上 · 双击 <b>start.vbs</b> 启动，再用 <b id="lanOpenHint">http://127.0.0.1:8088</b> 打开</span>
+  <button id="svcRetry">重试</button>
+</div>
+
+<header>
+  <div class="brand"><span class="mark">▶</span> 直播厅</div>
+  <span class="badge" id="badge"><span class="dot"></span><span id="badgeText">正在连接…</span></span>
+  <div class="spacer"></div>
+  <span class="clock" id="clock"></span>
+  <button class="icon-btn menu-toggle" id="menuToggle">频道</button>
+  <button class="icon-btn on" id="cinemaBtn" title="控制条自动隐藏开关：开启后静止 3 秒收起，鼠标移到画面下缘唤出，点击画面可显示/关闭切换">◐ 沉浸：开</button>
+  <button class="icon-btn" id="revBtn" title="上下换台方向反转：默认 ↑ 上一个、↓ 下一个；开启后 ↑ 下一个、↓ 上一个">⇅ 换台：正</button>
+  <button class="icon-btn" id="refreshBtn" title="重新拉取频道列表">↻ 刷新</button>
+</header>
+
+<main>
+  <aside id="aside">
+    <div class="side-top">
+      <input class="search" id="search" type="search" placeholder="搜索频道，例如 CCTV / 湖南 / 4K">
+      <div class="tabs">
+        <button class="tab on" data-tab="all">全部频道</button>
+        <button class="tab" data-tab="fav">我的收藏</button>
+      </div>
+    </div>
+    <div class="list" id="list"><div class="empty">正在读取频道列表…</div></div>
+    <div class="side-foot">
+      <span id="footCount">— 个频道</span>
+      <span id="footSrc">来源：—</span>
+    </div>
+  </aside>
+
+  <section class="stage">
+    <div class="player-box" id="playerBox">
+      <div class="screen">
+        <video id="video" playsinline></video>
+        <div class="overlay" id="overlay"></div>
+      </div>
+      <div class="fs-dock" id="fsDock">
+        <div class="fs-dock-head">
+          <span class="fs-dock-title">频道列表</span>
+          <button class="fs-dock-close" id="fsDockClose" title="关闭">✕</button>
+        </div>
+        <input class="fs-search" id="fsSearch" type="search" placeholder="搜索频道，例如 CCTV / 湖南 / 4K">
+        <div class="tabs">
+          <button class="tab on" data-tab="all">全部频道</button>
+          <button class="tab" data-tab="fav">我的收藏</button>
+        </div>
+        <div class="fs-list" id="fsList"></div>
+        <div class="fs-dock-foot" id="fsFoot">—</div>
+      </div>
+      <div class="nowbar">
+        <div style="flex:1;min-width:150px">
+          <div class="now-title" id="nowTitle">未选择频道</div>
+          <div class="now-sub" id="nowSub">从左侧列表点一个频道开始播放</div>
+        </div>
+        <span class="pill" id="statusPill">待机</span>
+        <span class="pill" id="qualityPill" style="display:none">—</span>
+        <button class="ctrl" id="favBtn" title="收藏当前频道">☆ 收藏</button>
+        <div class="vol">
+          <button class="ctrl" id="muteBtn" title="静音 / 取消静音">🔊</button>
+          <input type="range" id="volume" min="0" max="1" step="0.05" value="1" title="音量">
+        </div>
+        <button class="ctrl" id="pipBtn" title="画中画">⧉ 小窗</button>
+        <button class="ctrl" id="copyBtn" title="复制当前流地址">⧉ 地址</button>
+        <button class="ctrl" id="fsBtn" title="全屏">⛶ 全屏</button>
+      </div>
+    </div>
+    <div class="hint">
+      <span><b>快捷键</b> <kbd>↑</kbd><kbd>↓</kbd> 换台（右上角「⇅ 换台」可反转方向） · <kbd>←</kbd><kbd>→</kbd> 音量 ±5% · <kbd>空格</kbd> 播放/暂停 · <kbd>F</kbd> 全屏 · <kbd>M</kbd> 静音 · <kbd>/</kbd> 搜索</span>
+      <span><b>控制条</b> 点一下画面显示、再点一下关闭 · 静止 3 秒也会自动隐藏，鼠标移到画面下缘可唤出 · 右上角「◐ 沉浸」可常驻</span>
+      <span><b>全屏</b> 鼠标移到画面左缘唤出频道列表，移开自动收起</span>
+      <span><b>声音</b> 默认有声；浏览器若拦了首次自动播放会临时静音，点一下画面或按任意键即自动恢复</span>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="hls.min.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  function pageOrigin(){
+    return /^https?:$/.test(location.protocol) ? location.origin : 'http://127.0.0.1:8088';
+  }
+  // 默认源 = 与网页同一台主机上的 ysp-live.py（20345）。
+  // 局域网设备访问时不能写 127.0.0.1（那会指向设备自己），改成跟随网页主机名。
+  var LOCAL_SRC = 'http://' + (location.hostname || '127.0.0.1') + ':20345/all.m3u';
+  var DEFAULT_SRC = LOCAL_SRC;   // 只保留本地源，不再提供切换
+  var $ = function(id){ return document.getElementById(id); };
+  var lanHint = $('lanOpenHint');
+  if (lanHint) lanHint.textContent = pageOrigin();
+  var video = $('video'), overlay = $('overlay'), listEl = $('list');
+
+  // 只保留本地源：清掉老版本浏览器里可能残留的旧地址，每次都固定本地
+  function initialSrc(){
+    localStorage.removeItem('iptv.src.ver');
+    localStorage.setItem('iptv.src', DEFAULT_SRC);
+    return DEFAULT_SRC;
+  }
+
+  var state = {
+    src: initialSrc(),
+    list: [], visible: [], current: null,
+    favs: new Set(JSON.parse(localStorage.getItem('iptv.favs') || '[]')),
+    tab: 'all', query: '', sourceLabel: '—',
+    collapsed: new Set(), retries: 0, recovering: false, recoverCount: 0, firstLoad: true,
+    autoHide: localStorage.getItem('iptv.autohide') !== '0', userPaused: false,
+    reverseCh: localStorage.getItem('iptv.reversech') === '1'
+  };
+  var hls = null, toastTimer = null;
+
+  /* ---------- 源：固定本地，无切换入口 ---------- */
+
+  /* ---------- 小工具 ---------- */
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function toast(msg){
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+  }
+  function saveFavs(){ localStorage.setItem('iptv.favs', JSON.stringify(Array.from(state.favs))); }
+  function badge(text, kind){
+    $('badgeText').textContent = text;
+    $('badge').className = 'badge ' + (kind || '');
+  }
+  function setStatus(text, kind){
+    var p = $('statusPill');
+    p.textContent = text;
+    p.className = 'pill ' + (kind || '');
+  }
+  function overlayShow(mode, title, desc){
+    overlay.className = 'overlay ' + mode;
+    if (mode === 'hidden') { overlay.innerHTML = ''; return; }
+    var html = '';
+    if (mode === 'loading') html += '<div class="spin"></div>';
+    if (mode === 'idle') html += '<div class="big">▶</div>';
+    if (mode === 'error') html += '<div class="big">⚠</div>';
+    html += '<div class="t">' + esc(title) + '</div>';
+    if (desc) html += '<div class="d">' + esc(desc) + '</div>';
+    if (mode === 'error') html += '<button class="retry" id="retryBtn">重试当前频道</button>';
+    overlay.innerHTML = html;
+    if (mode === 'error') $('retryBtn').onclick = function(){ if (state.current) play(state.current); };
+  }
+
+  /* ---------- 频道数据 ---------- */
+  function parseM3U(text){
+    var out = [], pend = null;
+    text.split(/\r?\n/).forEach(function(raw){
+      var l = raw.trim();
+      if (!l) return;
+      if (l.indexOf('#EXTINF') === 0){
+        var gm = l.match(/group-title="([^"]*)"/i);
+        var i = l.indexOf(',');
+        pend = {
+          name: (i >= 0 ? l.slice(i+1).trim() : '') || '未命名',
+          group: (gm && gm[1]) || '其他'
+        };
+      } else if (l.indexOf('#EXTGRP') === 0 && pend){
+        pend.group = l.split(':').slice(1).join(':').trim() || pend.group;
+      } else if (pend && /^https?:\/\//i.test(l)){
+        pend.url = l; pend.key = l; out.push(pend); pend = null;
+      }
+    });
+    return out;
+  }
+
+  function normalize(list){
+    var seen = new Set();
+    return list.filter(function(ch){
+      if (!ch || !ch.url || seen.has(ch.url)) return false;
+      seen.add(ch.url);
+      ch.name = ch.name || '未命名';
+      ch.group = ch.group || '其他';
+      ch.key = ch.url;
+      return true;
+    });
+  }
+
+  async function loadList(){
+    setListHTML('<div class="empty">正在读取频道列表…</div>');
+    var candidates = [];
+    if (/^https?:$/.test(location.protocol)){
+      candidates.push({ label: '本地服务', url: '/m3u?src=' + encodeURIComponent(state.src) });
+    }
+    candidates.push({ label: '直连本地源', url: state.src });
+    candidates.push({ label: '本地快照', url: 'channels.json' });
+
+    var lastErr = null;
+    for (var i = 0; i < candidates.length; i++){
+      var c = candidates[i];
+      try {
+        var r = await fetch(c.url, { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var txt = await r.text();
+        var data = txt.trim().charAt(0) === '[' ? JSON.parse(txt) : parseM3U(txt);
+        data = normalize(data);
+        if (!data.length) throw new Error('列表为空');
+        state.list = data;
+        state.sourceLabel = c.label;
+        if (state.src === DEFAULT_SRC && c.label !== '本地服务'){
+          toast('本地直播源（20345）没连上，已用列表快照兜底：双击 start.vbs 拉起 ysp-live.py');
+        }
+        render();
+        if (state.firstLoad){
+          state.firstLoad = false;
+          var last = localStorage.getItem('iptv.last');
+          var pick = data.find(function(x){ return x.url === last; }) || data[0];
+          if (pick) play(pick);
+        } else {
+          updateActive();
+        }
+        $('footSrc').textContent = '来源：本地 · ' + state.sourceLabel;
+        badge('本地 · ' + data.length + ' 个频道 · ' + state.sourceLabel, 'ok');
+        checkHealth();
+        return;
+      } catch (e) { lastErr = e; }
+    }
+    state.list = [];
+    var tip = '本地直播源要先跑起来：双击 start.vbs 会启动 ysp-live.py（端口 20345），<br>stop.vbs 可停止；服务每 3 小时自动重启';
+    setListHTML('<div class="empty">频道列表加载失败<br><br>' + esc(lastErr ? lastErr.message : '未知错误') +
+      '<br><br>' + tip + '</div>');
+    $('footCount').textContent = '0 个频道';
+    badge('列表加载失败', 'bad');
+  }
+
+  async function checkHealth(){
+    if (!/^https?:$/.test(location.protocol)) { badge('本地文件模式 · ' + state.list.length + ' 频道', 'warn'); return; }
+    try {
+      var r = await fetch('/health?src=' + encodeURIComponent(state.src), { cache: 'no-store' });
+      var j = await r.json();
+      if (j.ok) badge('本地 在线 · ' + j.channels + ' 频道 · ' + j.ms + 'ms · ' + state.sourceLabel, 'ok');
+      else badge('源异常：' + j.error, 'bad');
+    } catch (e) { badge(state.sourceLabel + ' · ' + state.list.length + ' 频道', 'warn'); }
+  }
+
+  /* ---------- 列表渲染 ---------- */
+  function setListHTML(html){
+    listEl.innerHTML = html;
+    $('fsList').innerHTML = html;
+  }
+
+  function render(){
+    var q = state.query.trim().toLowerCase();
+    var matched = state.list.filter(function(ch){
+      if (state.tab === 'fav' && !state.favs.has(ch.key)) return false;
+      if (q && (ch.name + ' ' + ch.group).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    state.visible = matched;
+    $('footCount').textContent = matched.length + ' / ' + state.list.length + ' 个频道';
+
+    if (!matched.length){
+      var emptyHtml = '<div class="empty">' + (state.tab === 'fav' ? '还没有收藏，点频道右边的 ☆ 加一个' : '没找到匹配的频道') + '</div>';
+      setListHTML(emptyHtml);
+      $('fsFoot').textContent = '0 / ' + state.list.length + ' 个频道 · ' + state.sourceLabel;
+      return;
+    }
+
+    var groups = new Map();
+    matched.forEach(function(ch){
+      if (!groups.has(ch.group)) groups.set(ch.group, []);
+      groups.get(ch.group).push(ch);
+    });
+
+    var html = '';
+    groups.forEach(function(items, gname){
+      var closed = state.collapsed.has(gname);
+      html += '<div class="group' + (closed ? ' closed' : '') + '">' +
+        '<button class="group-head" data-group="' + esc(gname) + '">' +
+          '<span class="arrow">▼</span><span>' + esc(gname) + '</span><span class="cnt">' + items.length + '</span>' +
+        '</button><div class="group-body">';
+      items.forEach(function(ch){
+        var on = state.current && state.current.url === ch.url;
+        var fav = state.favs.has(ch.key);
+        html += '<div class="ch' + (on ? ' on' : '') + '" data-url="' + esc(ch.url) + '">' +
+          '<span class="ch-name">' + esc(ch.name) + '</span>' +
+          (state.tab === 'fav' || q ? '<span class="ch-tag">' + esc(ch.group) + '</span>' : '') +
+          '<button class="fav' + (fav ? ' on' : '') + '" data-fav="' + esc(ch.url) + '" title="收藏">' + (fav ? '★' : '☆') + '</button>' +
+        '</div>';
+      });
+      html += '</div></div>';
+    });
+    setListHTML(html);
+    $('fsFoot').textContent = matched.length + ' / ' + state.list.length + ' 个频道 · ' + state.sourceLabel;
+  }
+
+  function updateActive(){
+    Array.prototype.forEach.call(document.querySelectorAll('#list .ch, #fsList .ch'), function(el){
+      el.classList.toggle('on', !!state.current && el.dataset.url === state.current.url);
+    });
+  }
+
+  /* ---------- 播放 ---------- */
+  // 默认有声。浏览器不允许「无交互 + 有声」自动播放，只有真被拦时才临时
+  // 静音把画面拉起来，并在用户第一次点击 / 按键后自动把声音还回来。
+  var pendingUnmute = false;
+  function attemptPlay(){
+    var p = video.play();
+    if (p && p.catch) p.catch(function(e){
+      if (e.name !== 'NotAllowedError' || video.muted) return;
+      video.muted = true;
+      pendingUnmute = true;
+      syncVolumeUI();
+      var p2 = video.play();
+      if (p2 && p2.then) p2.then(function(){
+        toast('浏览器拦了自动有声播放，点一下画面即可恢复声音');
+      }).catch(function(){});
+    });
+  }
+  function restoreSound(e){
+    if (!pendingUnmute) return;
+    // 音量按钮 / 音量条 / M 键 / ← → 由用户自己接管，别和自动恢复打架
+    var onControl = e && e.target && e.target.closest && e.target.closest('#muteBtn, #volume');
+    if (onControl || (e && e.type === 'keydown' &&
+        (e.key === 'm' || e.key === 'M' || e.key === 'ArrowLeft' || e.key === 'ArrowRight'))){
+      pendingUnmute = false;
+      return;
+    }
+    pendingUnmute = false;
+    if (!video.muted) return;
+    video.muted = false;
+    syncVolumeUI();
+    // 解除静音的瞬间浏览器可能把媒体挂起，趁着这次用户手势把播放拉回来
+    if (video.paused && !state.userPaused){
+      var p = video.play();
+      if (p && p.catch) p.catch(function(){});
+    }
+    toast('声音已开启 🔊');
+  }
+  ['pointerdown', 'keydown'].forEach(function(ev){
+    document.addEventListener(ev, restoreSound, true);
+  });
+
+  function proxyPlaylist(url){
+    return pageOrigin() + '/hls?u=' + encodeURIComponent(url);
+  }
+
+  function logHlsError(data){
+    var log = window.__hlsErrors = window.__hlsErrors || [];
+    log.push({
+      type: data.type, details: data.details, fatal: !!data.fatal,
+      url: (data.url || '').slice(0, 200),
+      code: data.response && data.response.code,
+      reason: data.error && (data.error.message || String(data.error)).slice(0, 160),
+      at: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    });
+    if (log.length > 60) log.shift();
+  }
+
+  var recoverTimer = null;
+  function resetRecover(){
+    clearTimeout(recoverTimer);
+    recoverTimer = null;
+    state.recovering = false;
+    state.recoverCount = 0;
+    state.retries = 0;
+  }
+
+  function autoRecover(reason){
+    if (!state.current || state.recovering) return;
+    if (state.recoverCount >= 10){
+      setStatus('重连失败，点频道重试', 'bad');
+      return;
+    }
+    state.recovering = true;
+    state.recoverCount++;
+    var delay = Math.min(700 * state.recoverCount, 4000);
+    setStatus('自动重连 ' + state.recoverCount + '…', '');
+    if (state.recoverCount === 1) toast('播放中断（' + reason + '），正在自动重连');
+    recoverTimer = setTimeout(function(){
+      recoverTimer = null;
+      state.recovering = false;
+      if (state.current) startHls();
+    }, delay);
+  }
+
+  function onHlsError(evt, data){
+    logHlsError(data);
+    if (!data.fatal){
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) setStatus('缓冲中…', '');
+      return;
+    }
+    if (data.details === 'levelParsingError' || data.details === 'manifestParsingError'){
+      autoRecover('列表跳号'); return;
+    }
+    if (data.type === Hls.ErrorTypes.NETWORK_ERROR && state.retries < 2){
+      state.retries++;
+      setStatus('网络抖动，重试 ' + state.retries + '/2', '');
+      if (hls) hls.startLoad();
+      return;
+    }
+    if (data.type === Hls.ErrorTypes.MEDIA_ERROR && state.retries < 2){
+      state.retries++;
+      setStatus('解码异常，恢复 ' + state.retries + '/2', '');
+      if (hls) hls.recoverMediaError();
+      return;
+    }
+    autoRecover(data.details || '流中断');
+  }
+
+  function fail(msg){
+    setStatus('无法播放', 'bad');
+    overlayShow('error', '无法播放', (state.current ? state.current.name + '：' : '') + msg);
+  }
+
+  function startHls(){
+    if (!state.current) return;
+    if (hls){ hls.destroy(); hls = null; }
+    var url = proxyPlaylist(state.current.url);
+    if (window.Hls && Hls.isSupported()){
+      hls = new Hls({
+        enableWorker: true,
+        // 直播本来就有约 20 秒延迟，不必贴直播沿跑。缓冲加厚用于在本地源
+        // 每 3 小时重启（约 2~4 秒不可用）或 CDN 偶发慢分片时不打断画面。
+        lowLatencyMode: false,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        liveSyncDurationCount: 5,
+        liveMaxLatencyDurationCount: 12,
+        backBufferLength: 30,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 500,
+        levelLoadingMaxRetry: 4,
+        levelLoadingRetryDelay: 500,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 500
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, function(){
+        overlayShow('hidden');
+        setStatus('直播中', 'live');
+        attemptPlay();
+      });
+      hls.on(Hls.Events.FRAG_LOADED, function(){
+        if (state.recoverCount || state.retries) resetRecover();
+        if ($('statusPill').textContent.indexOf('直播中') < 0) setStatus('直播中', 'live');
+      });
+      hls.on(Hls.Events.ERROR, onHlsError);
+      hls.loadSource(url);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')){
+      video.src = url;
+      video.addEventListener('loadedmetadata', function(){
+        overlayShow('hidden'); setStatus('直播中', 'live'); attemptPlay();
+      }, { once: true });
+      video.addEventListener('error', function(){
+        autoRecover('原生播放失败');
+      }, { once: true });
+    } else {
+      fail('这个浏览器既不支持 hls.js 也不支持原生 HLS，换 Chrome / Edge / Safari 再试。');
+    }
+  }
+
+  function play(ch){
+    if (!ch) return;
+    state.current = ch;
+    state.userPaused = false;
+    resetRecover();
+    localStorage.setItem('iptv.last', ch.url);
+    $('nowTitle').textContent = ch.name;
+    $('nowSub').textContent = ch.group + ' · ' + ch.url;
+    $('favBtn').textContent = state.favs.has(ch.key) ? '★ 已收藏' : '☆ 收藏';
+    $('favBtn').classList.toggle('on', state.favs.has(ch.key));
+    $('qualityPill').style.display = 'none';
+    updateActive();
+
+    if (location.protocol === 'https:'){
+      fail('当前是 https 页面，浏览器会拦截 http 视频流（混合内容）。请用 ' + pageOrigin().replace(/^https:/, 'http:') + ' 打开。');
+      return;
+    }
+    setStatus('连接中…', '');
+    showUI();
+    overlayShow('loading', '正在连接 ' + ch.name, '第一次加载直播流通常要等 2～5 秒');
+    try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) {}
+    startHls();
+  }
+
+  function switchChannel(delta){
+    if (!state.visible.length) return;
+    var i = state.current ? state.visible.findIndex(function(x){ return x.url === state.current.url; }) : -1;
+    var n = (i + delta + state.visible.length) % state.visible.length;
+    play(state.visible[n]);
+  }
+
+  /* ---------- 音量 / 全屏 / 收藏 ---------- */
+  function syncVolumeUI(){
+    $('volume').value = String(video.muted ? 0 : video.volume);
+    $('muteBtn').textContent = (video.muted || video.volume === 0) ? '🔇' : '🔊';
+  }
+  // ← → 调音量：步长与滑块一致（5%），调音量即解除静音，并记住当前音量
+  function changeVolume(dir){
+    pendingUnmute = false;                 // 用户自己接管音量，别和自动恢复声音打架
+    var v = Math.min(1, Math.max(0, Math.round((video.volume + dir * 0.05) * 100) / 100));
+    video.volume = v;
+    video.muted = false;
+    syncVolumeUI();
+    localStorage.setItem('iptv.volume', String(v));
+    if (video.paused && !state.userPaused){ var p = video.play(); if (p && p.catch) p.catch(function(){}); }
+    toast('音量 ' + Math.round(v * 100) + '%');
+  }
+
+  function toggleFav(url){
+    if (!url) return;
+    if (state.favs.has(url)) state.favs.delete(url); else state.favs.add(url);
+    saveFavs(); render(); updateActive();
+    if (state.current && state.current.url === url){
+      $('favBtn').textContent = state.favs.has(url) ? '★ 已收藏' : '☆ 收藏';
+      $('favBtn').classList.toggle('on', state.favs.has(url));
+    }
+  }
+
+  /* ---------- 影院模式：底部控制条自动隐藏 ---------- */
+  var playerBox = $('playerBox'), nowbar = document.querySelector('.nowbar');
+  var uiTimer = null, uiSuppressed = 0, HIDE_DELAY = 3000;
+
+  function canHideUI(force){
+    if ((!force && !state.autoHide) || !state.current) return false;
+    if (document.body.classList.contains('fs-dock-open')) return false;  // 全屏频道列表打开时别收
+    if (force) return true;      // 手动操作：播放/重连/出错时一样听用户的
+    // 只拦「用户主动按空格暂停」；服务掉线、缓冲、重连、错误层常驻时仍允许自动隐藏
+    // （错误提示在画面中央的 overlay 上，不依赖底部控制条；重连会改状态文案，所以不能用文案判断）
+    if (state.userPaused) return false;
+    return true;
+  }
+  function scheduleHide(){
+    clearTimeout(uiTimer);
+    uiTimer = setTimeout(function(){ hideUI(); }, HIDE_DELAY);
+  }
+  function hideUI(){
+    clearTimeout(uiTimer); uiTimer = null;
+    if (!canHideUI(false)) return;
+    if (nowbar.matches && nowbar.matches(':hover')){           // 鼠标停在控制条上，先别收
+      uiTimer = setTimeout(function(){ hideUI(); }, 1200);
+      return;
+    }
+    document.body.classList.add('ui-hidden');
+  }
+  function showUI(){
+    uiSuppressed = 0;
+    document.body.classList.remove('ui-hidden');
+    scheduleHide();
+  }
+  // 点画面 = 显示 / 关闭 切换；直播播放状态不受影响
+  function toggleUI(){
+    if (!state.current) return;
+    if (document.body.classList.contains('fs-dock-open')) return;  // 全屏频道面板打开时保持可见
+    if (document.body.classList.contains('ui-hidden')){ showUI(); return; }
+    // 手动点击不经过 canHideUI：即使服务掉线 / 播放失败 / 重连中，也一定能关掉控制条
+    clearTimeout(uiTimer); uiTimer = null;
+    document.body.classList.add('ui-hidden');
+    uiSuppressed = Date.now() + 1000;           // 短暂抑制下缘唤出，避免刚关掉又弹回来
+  }
+  function syncCinemaBtn(){
+    var b = $('cinemaBtn');
+    b.textContent = state.autoHide ? '◐ 沉浸：开' : '◐ 沉浸：关';
+    b.classList.toggle('on', state.autoHide);
+  }
+  function syncRevBtn(){
+    var b = $('revBtn');
+    b.textContent = state.reverseCh ? '⇅ 换台：反' : '⇅ 换台：正';
+    b.classList.toggle('on', state.reverseCh);
+  }
+  $('revBtn').addEventListener('click', function(){
+    state.reverseCh = !state.reverseCh;
+    localStorage.setItem('iptv.reversech', state.reverseCh ? '1' : '0');
+    syncRevBtn();
+    toast(state.reverseCh ? '换台方向已反转：↑ 下一个频道、↓ 上一个频道' : '换台方向已恢复：↑ 上一个频道、↓ 下一个频道');
+  });
+  syncRevBtn();
+  document.addEventListener('mousemove', function(e){
+    var r = playerBox.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom){
+      if (Date.now() > uiSuppressed) uiSuppressed = 0;
+      return;
+    }
+    if (document.body.classList.contains('ui-hidden')){
+      var zone = Math.min(170, Math.max(100, r.height * 0.22));  // 隐藏时只认画面下缘
+      if (e.clientY < r.bottom - zone){ uiSuppressed = 0; return; }
+      if (Date.now() < uiSuppressed) return;
+    }
+    showUI();
+  });
+  $('cinemaBtn').addEventListener('click', function(){
+    state.autoHide = !state.autoHide;
+    localStorage.setItem('iptv.autohide', state.autoHide ? '1' : '0');
+    if (state.autoHide) showUI();
+    else { clearTimeout(uiTimer); document.body.classList.remove('ui-hidden'); }
+    syncCinemaBtn();
+    toast(state.autoHide ? '控制条自动隐藏已开启：静止 3 秒收起，鼠标移到下缘唤出，点画面显示/关闭切换' : '控制条已改为常驻显示（点画面仍可手动显示/关闭）');
+  });
+  // 直播不做点击暂停：点画面在显示 / 关闭之间切换
+  document.querySelector('.screen').addEventListener('click', function(){ toggleUI(); });
+  syncCinemaBtn();
+
+  /* ---------- 全屏：左侧悬浮频道列表 ---------- */
+  var fsDock = $('fsDock'), fsOpen = false, fsCooldown = 0;
+  var FS_EDGE = 90, FS_BOTTOM_GUARD = 64;   // 左缘热区宽度 / 让开底部控制条
+
+  function openFsDock(){
+    if (fsOpen || !document.fullscreenElement) return;
+    fsOpen = true;
+    fsDock.classList.add('open');
+    document.body.classList.add('fs-dock-open');
+  }
+  function closeFsDock(){
+    if (!fsOpen) return;
+    fsOpen = false;
+    fsDock.classList.remove('open');
+    document.body.classList.remove('fs-dock-open');
+  }
+  document.addEventListener('fullscreenchange', function(){
+    var on = !!document.fullscreenElement;
+    document.body.classList.toggle('fs-full', on);
+    if (!on){ closeFsDock(); fsCooldown = 0; }
+  });
+  document.addEventListener('mousemove', function(e){
+    if (!document.fullscreenElement) return;
+    var r = playerBox.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom){
+      closeFsDock(); fsCooldown = 0; return;
+    }
+    if (fsOpen){
+      var p = fsDock.getBoundingClientRect();
+      if (e.clientX <= p.right + 10) return;  // 鼠标还在面板上，保持
+      closeFsDock(); return;                  // 往右移开就收起
+    }
+    var hot = e.clientX <= r.left + FS_EDGE && e.clientY <= r.bottom - FS_BOTTOM_GUARD;
+    if (hot && Date.now() > fsCooldown) openFsDock();
+    else if (!hot) fsCooldown = 0;
+  });
+  $('fsDockClose').addEventListener('click', function(){ closeFsDock(); fsCooldown = Date.now() + 700; });
+  $('fsSearch').addEventListener('input', function(e){
+    state.query = e.target.value;
+    $('search').value = e.target.value;
+    render();
+  });
+
+  /* ---------- 事件 ---------- */
+  function handleListClick(e){
+    var fav = e.target.closest('[data-fav]');
+    if (fav){ e.stopPropagation(); toggleFav(fav.dataset.fav); return; }
+    var head = e.target.closest('[data-group]');
+    if (head){
+      var g = head.dataset.group;
+      if (state.collapsed.has(g)) state.collapsed.delete(g); else state.collapsed.add(g);
+      render(); return;
+    }
+    var ch = e.target.closest('[data-url]');
+    if (ch){
+      var found = state.list.find(function(x){ return x.url === ch.dataset.url; });
+      if (found) play(found);
+      $('aside').classList.remove('open');
+      if (document.fullscreenElement){ closeFsDock(); fsCooldown = Date.now() + 700; }
+    }
+  }
+  listEl.addEventListener('click', handleListClick);
+  $('fsList').addEventListener('click', handleListClick);
+
+  $('search').addEventListener('input', function(e){
+    state.query = e.target.value; $('fsSearch').value = e.target.value; render();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){
+    t.addEventListener('click', function(){
+      state.tab = t.dataset.tab;
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(x){ x.classList.toggle('on', x.dataset.tab === t.dataset.tab); });
+      render();
+    });
+  });
+
+  $('favBtn').addEventListener('click', function(){ if (state.current) toggleFav(state.current.url); });
+  $('muteBtn').addEventListener('click', function(){
+    pendingUnmute = false;
+    video.muted = !video.muted; syncVolumeUI();
+  });
+  $('volume').addEventListener('input', function(e){
+    pendingUnmute = false;
+    video.volume = Number(e.target.value); video.muted = false; syncVolumeUI();
+    localStorage.setItem('iptv.volume', String(video.volume));
+  });
+  $('fsBtn').addEventListener('click', function(){
+    if (document.fullscreenElement) document.exitFullscreen();
+    else $('playerBox').requestFullscreen().catch(function(){ toast('这个浏览器不允许全屏'); });
+  });
+  $('pipBtn').addEventListener('click', function(){
+    if (!document.pictureInPictureEnabled || !video.requestPictureInPicture) { toast('这个浏览器不支持画中画'); return; }
+    if (document.pictureInPictureElement) document.exitPictureInPicture();
+    else video.requestPictureInPicture().catch(function(){ toast('画中画启动失败，先让视频播起来'); });
+  });
+  $('copyBtn').addEventListener('click', function(){
+    if (!state.current) return;
+    navigator.clipboard.writeText(state.current.url).then(function(){ toast('已复制流地址'); })
+      .catch(function(){ toast(state.current.url); });
+  });
+  $('refreshBtn').addEventListener('click', function(){ toast('正在刷新频道列表'); loadList(); });
+  $('menuToggle').addEventListener('click', function(){ $('aside').classList.toggle('open'); });
+
+  function updateQuality(){
+    if (video.videoWidth && video.videoHeight){
+      $('qualityPill').textContent = video.videoWidth + '×' + video.videoHeight;
+      $('qualityPill').style.display = '';
+    }
+  }
+  video.addEventListener('loadedmetadata', updateQuality);
+  video.addEventListener('resize', updateQuality);
+  video.addEventListener('timeupdate', function(){
+    if (state.current && !video.paused && video.readyState >= 3 &&
+        $('statusPill').textContent.indexOf('重试') >= 0){
+      setStatus('直播中', 'live');
+    }
+  });
+  video.addEventListener('waiting', function(){ if (state.current) setStatus('缓冲中…', ''); });
+  video.addEventListener('playing', function(){
+    if (state.current) { setStatus('直播中', 'live'); overlayShow('hidden'); scheduleHide(); }
+  });
+  video.addEventListener('pause', function(){
+    if (state.current && state.userPaused){ setStatus('已暂停', ''); showUI(); }
+  });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') { if (e.key === 'Escape') e.target.blur(); return; }
+    showUI();
+    if (e.key === '/') { e.preventDefault(); $('search').focus(); return; }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      var d = e.key === 'ArrowUp' ? -1 : 1;
+      switchChannel(state.reverseCh ? -d : d);
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault(); changeVolume(e.key === 'ArrowRight' ? 1 : -1); return;
+    }
+    if (e.key === ' '){
+      e.preventDefault();
+      if (video.paused){ state.userPaused = false; video.play(); }
+      else { state.userPaused = true; video.pause(); }
+      return;
+    }
+    if (e.key === 'f' || e.key === 'F') { $('fsBtn').click(); return; }
+    if (e.key === 'm' || e.key === 'M') { $('muteBtn').click(); }
+  });
+
+  overlay.addEventListener('click', function(e){
+    if (e.target.id !== 'retryBtn' && overlay.classList.contains('idle') && state.list.length){
+      play(state.current || state.list[0]);
+    }
+  });
+
+  /* ---------- 启动 ---------- */
+  var savedRaw = localStorage.getItem('iptv.volume');
+  var savedVol = savedRaw === null ? NaN : Number(savedRaw);   // 存过 0 就是 0，别当成「没存过」
+  video.volume = isNaN(savedVol) || savedVol < 0 || savedVol > 1 ? 1 : savedVol;
+  syncVolumeUI();
+  function tick(){
+    $('clock').textContent = new Date().toLocaleString('zh-CN', { hour12:false });
+  }
+  tick(); setInterval(tick, 1000);
+
+  // 看门狗：时间轴 12 秒不推进，或「时间轴在走但视频帧不增」（有声音没画面）都自动重连
+  var lastT = -1, stallSec = 0, lastFrames = -1, frozenSec = 0;
+  setInterval(function(){
+    if (!state.current || !hls || video.paused){
+      lastT = video.currentTime; stallSec = 0; lastFrames = -1; frozenSec = 0; return;
+    }
+    var t = video.currentTime, f = -1;
+    try {
+      var q = video.getVideoPlaybackQuality && video.getVideoPlaybackQuality();
+      if (q && typeof q.totalVideoFrames === 'number') f = q.totalVideoFrames;
+      else if (typeof video.webkitDecodedFrameCount === 'number') f = video.webkitDecodedFrameCount;
+    } catch (e) {}
+    if (t > lastT + 0.15 || t < lastT - 1){
+      // 音频时钟会让 currentTime 继续走，所以时间轴正常不代表画面在动
+      if (f > 0 && f === lastFrames){
+        frozenSec += 3;
+        if (frozenSec >= 9){
+          frozenSec = 0; lastT = t; lastFrames = f;
+          autoRecover('有声音但画面冻结'); return;
+        }
+      } else { frozenSec = 0; }
+      lastT = t; lastFrames = f; stallSec = 0; return;
+    }
+    lastT = t; lastFrames = f;
+    stallSec += 3;
+    if (stallSec >= 12){ stallSec = 0; autoRecover('画面停滞'); }
+  }, 3000);
+
+  if (location.protocol === 'https:'){
+    overlayShow('error', '请用 http 打开', 'https 页面无法加载 http 视频流，浏览器会直接拦截。地址改成 ' + pageOrigin().replace(/^https:/, 'http:'));
+  } else {
+    overlayShow('idle', '直播厅', '左侧选频道即可播放 · 共 63 个频道 · 支持搜索、收藏、全屏');
+    loadList();
+  }
+
+  /* ---------- 本地服务心跳 ----------
+     服务被回收 / 电脑重启后页面还留在浏览器里，播放会失败、控制条也会卡在常显状态。
+     这里每 5 秒探一次静态文件：掉线就给明确横幅，恢复后自动重载列表并重建播放。 */
+  var svcBanner = $('svcBanner'), svcDown = false;
+  async function checkService(){
+    if (!/^https?:$/.test(location.protocol)) return;
+    try {
+      var r = await fetch('/channels.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (svcDown){
+        svcDown = false;
+        svcBanner.classList.remove('show');
+        toast('本地服务已恢复，正在重新加载');
+        await loadList();
+        if (state.current && !state.firstLoad) play(state.current);
+      }
+    } catch (e) {
+      if (!svcDown){ svcDown = true; svcBanner.classList.add('show'); }
+    }
+  }
+  $('svcRetry').addEventListener('click', function(){ checkService(); });
+  checkService();
+  setInterval(checkService, 5000);
+})();
+</script>
+</body>
+</html>
